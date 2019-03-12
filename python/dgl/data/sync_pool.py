@@ -83,9 +83,12 @@ class SyncPoolDataset():
             n_A = int(split_ratio * self.num_sub_graphs)
             n_B = self.num_sub_graphs - n_A
             for _ in range(n_A):
-                g, feat = self.gen_component(self.feature_type, self.A_params,
-                                             self.min_nodes, self.max_nodes,
-                                             self.min_deg, self.max_deg)
+                if self.gen_graph_type == 'default':
+                    g, feat = self.gen_component(self.feature_type, self.A_params,
+                                                 self.min_nodes, self.max_nodes,
+                                                 self.min_deg, self.max_deg)
+                elif self.gen_graph_type == 'tu':
+                    g, feat, 
                 graphs.append(g)
                 feats.append(feat)
             for _ in range(n_B):
