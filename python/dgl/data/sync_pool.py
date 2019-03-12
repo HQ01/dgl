@@ -2,6 +2,7 @@ import numpy as np
 import dgl
 import os
 import networkx as nx
+import random
 
 from ..graph import DGLGraph
 
@@ -43,7 +44,8 @@ class Sync_pool_dataset():
     2) If backend = DGL: return DGL graph and DGL backend tensor.
     """
 
-    def __init__(self, num_graphs, gen_graph_type='default', num_sub_graphs=15,
+    def __init__(self, num_graphs, gen_graph_type='default',
+                 num_sub_graphs=15,
                  feature_type='gaussian', data_split_ratio = [0.8,0.1,0.1]):
         super(Sync_pool_dataset, self).__init__()
         self.num_graphs = num_graphs
@@ -61,9 +63,9 @@ class Sync_pool_dataset():
                          'variance':np.random.uniform(0,1),
                          'dim':32}
         self.graphs = []
-        self.feature = []
-        self.gen_graphs()
+        self.features = []
         self.labels = []
+        self.gen_graphs()
 
         BACKEND = 'default'
 
@@ -71,16 +73,15 @@ class Sync_pool_dataset():
         return len(self.graphs)
 
     def __getitem__(self, idx):
-        return self.graphs[idx], self.labels[idx]
+        return self.graphs[idx], self.features[idx], self.labels[idx]
 
     def _get_all(self):
-        return self.graphs, self.feature
+        return self.graphs, self.features, self.labels
 
     def gen_graphs(self):
         for n in range(self.num_graphs):
             graphs = []
             feats = []
-            labels = []
             split_ratio = np.random.uniform(0,1)
             n_A = int(split_ratio * self.num_sub_graphs)
             n_B = self.num_sub_graphs - n_A
@@ -102,7 +103,11 @@ class Sync_pool_dataset():
             else:
                 composite_label = 1
             compo_g = self.connect_subgraphs(graphs)
-            compo_feats = np.concatenate()
+            compo_feats = np.concatenate(feats,axis=0)
+            self.graphs.append(compo_g)
+            self.features.append(compo_feats)
+            self.labels.append(composite_label)
+
 
     def connect_subgraphs(self, graph_list):
         '''
@@ -121,14 +126,12 @@ class Sync_pool_dataset():
                              range(len(bg_node_list))]
 
         for (src, dst) in super_g.edges():
-            a_src = np.random.randint(low=(0 if src == 0 else
-                                           accu_bg_node_list[src-1]),
-                                      high=accu_bg_node_list[src],
-                                      size=1)
-            a_dst = np.random.randint(low=(0 if dst == 0 else
-                                           accu_bg_node_list[dst-1]),
-                                      high=accu_bg_node_list[dst],
-                                      size=1)
+            a_src = random.randint((0 if src == 0 else
+                                    accu_bg_node_list[src-1]),
+                                    accu_bg_node_list[src])
+            a_dst = random.randint((0 if dst == 0 else
+                                    accu_bg_node_list[dst-1]),
+                                    accu_bg_node_list[dst])
             g.add_edges([a_src],[a_dst])
             # add super edge type?
 
@@ -138,20 +141,20 @@ class Sync_pool_dataset():
 
 
 
-    def from_networkx(self, g, feat=['feat']):
+    def from_networkx(self, g):
         dgl_g = dgl.DGLGraph()
-        dgl_g.from_networkx(g, node_attrs=feat)
+        dgl_g.from_networkx(g)
         return dgl_g
 
-    def to_networkx(self, g, feat=['feat']):
-        nx_g = g.to_networkx(node_attrs=['feat'])
+    def to_networkx(self, g):
+        nx_g = g.to_networkx()
         return nx_g
 
     def de_batch(self, g):
         dg = dgl.DGLGraph()
         dg.add_nodes(g.number_of_nodes())
         dg.add_edges(*list(g.edges()))
-        dg.ndata['feat'] = g.ndata['feat']
+        # dg.ndata['feat'] = g.ndata['feat']
 
         return dg
 
@@ -162,8 +165,8 @@ class Sync_pool_dataset():
 
     def gen_component(self, feature_type, feature_params,
                       min_nodes, max_nodes, min_deg, max_deg):
-        num_n = np.random.randint(min_nodes, max_nodes)
-        deg = np.random.randint(min_deg, max_deg)
+        num_n = int(random.randint(min_nodes, max_nodes)/2)*2
+        deg = int(random.randint(min_deg, max_deg)/2)*4
         g = nx.random_regular_graph(deg, num_n)
         g = max(nx.connected_component_subgraphs(g), key=len)
         # ensure connected component
@@ -176,8 +179,8 @@ class Sync_pool_dataset():
                                     (g.number_of_nodes(),
                                      feature_params['dim']))
 
-            feat_dict = {i: {'feat': feat[i,:]} for i in range(feat.shape[0])}
-            nx.set_node_attributes(g, feat_dict)
+            # feat_dict = {i: {'feat': feat[i,:]} for i in range(feat.shape[0])}
+            # nx.set_node_attributes(g, feat_dict)
         else:
             raise NotImplementedError
 
