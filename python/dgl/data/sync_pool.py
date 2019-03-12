@@ -43,15 +43,13 @@ class Sync_pool_dataset():
     2) If backend = DGL: return DGL graph and DGL backend tensor.
     """
 
-    def __init__(self, num_graphs, gen_graph_type='default', num_sub_graphs=10,
-                 feature_type='gaussian', num_graph_type=2, data_split_ratio = [0.8,0.1,0.1]):
+    def __init__(self, num_graphs, gen_graph_type='default', num_sub_graphs=15,
+                 feature_type='gaussian', data_split_ratio = [0.8,0.1,0.1]):
         super(Sync_pool_dataset, self).__init__()
         self.num_graphs = num_graphs
         self.gen_graph_type = gen_graph_type
         self.num_sub_graphs = num_sub_graphs
-        self.split_ratio = split_ratio
         self.feature_type = feature_type
-        self.graph_label = graph_label
         self.min_nodes = 30
         self.max_nodes = 50
         self.min_deg = 3
@@ -65,7 +63,9 @@ class Sync_pool_dataset():
         self.graphs = []
         self.feature = []
         self.gen_graphs()
-        label = [i for i in range(num_graph_type)]
+        self.labels = []
+
+        BACKEND = 'default'
 
     def __len__(self):
         return len(self.graphs)
@@ -85,13 +85,13 @@ class Sync_pool_dataset():
             n_A = int(split_ratio * self.num_sub_graphs)
             n_B = self.num_sub_graphs - n_A
             for i in range(n_A):
-                g, feat = gen_component(self.feature_type, self.A_params,
+                g, feat = self.gen_component(self.feature_type, self.A_params,
                                         self.min_nodes, self.max_nodes,
                                         self.min_deg, self.max_deg)
                 graphs.append(g)
                 feats.append(feat)
             for i in range(n_B):
-                g, feat = gen_component(self.feature_type, self.B_params,
+                g, feat = self.gen_component(self.feature_type, self.B_params,
                                         self.min_nodes, self.max_nodes,
                                         self.min_deg, self.max_deg)
                 graphs.append(g)
@@ -101,6 +101,60 @@ class Sync_pool_dataset():
                 composite_label = 0
             else:
                 composite_label = 1
+            compo_g = self.connect_subgraphs(graphs)
+            compo_feats = np.concatenate()
+
+    def connect_subgraphs(self, graph_list):
+        '''
+        parameters : idk
+        return : a randomly connected graph.
+        '''
+        # we assume num sub graph is 15
+        super_g = nx.erdos_renyi_graph(len(graph_list), 0.2, seed=123,
+                                       directed=False)
+        # first we cast the graph_list to a large graph using DGL API
+        graph_list = [self.from_networkx(g) for g in graph_list]
+        batch_graph = dgl.batch(graph_list)
+        bg_node_list = batch_graph.batch_num_nodes
+        g = self.de_batch(batch_graph)
+        accu_bg_node_list = [sum(bg_node_list[:i+1]) for i in
+                             range(len(bg_node_list))]
+
+        for (src, dst) in super_g.edges():
+            a_src = np.random.randint(low=(0 if src == 0 else
+                                           accu_bg_node_list[src-1]),
+                                      high=accu_bg_node_list[src],
+                                      size=1)
+            a_dst = np.random.randint(low=(0 if dst == 0 else
+                                           accu_bg_node_list[dst-1]),
+                                      high=accu_bg_node_list[dst],
+                                      size=1)
+            g.add_edges([a_src],[a_dst])
+            # add super edge type?
+
+        g = self.to_networkx(g)
+
+        return g
+
+
+
+    def from_networkx(self, g, feat=['feat']):
+        dgl_g = dgl.DGLGraph()
+        dgl_g.from_networkx(g, node_attrs=feat)
+        return dgl_g
+
+    def to_networkx(self, g, feat=['feat']):
+        nx_g = g.to_networkx(node_attrs=['feat'])
+        return nx_g
+
+    def de_batch(self, g):
+        dg = dgl.DGLGraph()
+        dg.add_nodes(g.number_of_nodes())
+        dg.add_edges(*list(g.edges()))
+        dg.ndata['feat'] = g.ndata['feat']
+
+        return dg
+
 
 
 
