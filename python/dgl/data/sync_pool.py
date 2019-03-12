@@ -1,12 +1,9 @@
 import numpy as np
-import dgl
-import os
 import networkx as nx
 import random
+import dgl
 
-from ..graph import DGLGraph
-
-class Sync_pool_dataset():
+class SyncPoolDataset():
     """A synthetic dataset for graph pooling.
 
     This dataset contains several subgraphs, with only sparse connections among
@@ -46,8 +43,8 @@ class Sync_pool_dataset():
 
     def __init__(self, num_graphs, gen_graph_type='default',
                  num_sub_graphs=15,
-                 feature_type='gaussian', data_split_ratio = [0.8,0.1,0.1]):
-        super(Sync_pool_dataset, self).__init__()
+                 feature_type='gaussian', data_split_ratio=[0.8, 0.1, 0.1]):
+        super(SyncPoolDataset, self).__init__()
         self.num_graphs = num_graphs
         self.gen_graph_type = gen_graph_type
         self.num_sub_graphs = num_sub_graphs
@@ -56,11 +53,11 @@ class Sync_pool_dataset():
         self.max_nodes = 50
         self.min_deg = 3
         self.max_deg = 5
-        self.A_params = {'label':0,'mean':np.random.uniform(0,1),
-                         'variance':np.random.uniform(0,1),
+        self.A_params = {'label':0,'mean':np.random.uniform(0, 1),
+                         'variance':np.random.uniform(0, 1),
                          'dim':32}
-        self.B_params = {'label':1, 'mean':np.random.uniform(0,1),
-                         'variance':np.random.uniform(0,1),
+        self.B_params = {'label':1, 'mean':np.random.uniform(0, 1),
+                         'variance':np.random.uniform(0, 1),
                          'dim':32}
         self.graphs = []
         self.features = []
@@ -82,19 +79,19 @@ class Sync_pool_dataset():
         for n in range(self.num_graphs):
             graphs = []
             feats = []
-            split_ratio = np.random.uniform(0,1)
+            split_ratio = np.random.uniform(0, 1)
             n_A = int(split_ratio * self.num_sub_graphs)
             n_B = self.num_sub_graphs - n_A
-            for i in range(n_A):
+            for _ in range(n_A):
                 g, feat = self.gen_component(self.feature_type, self.A_params,
-                                        self.min_nodes, self.max_nodes,
-                                        self.min_deg, self.max_deg)
+                                             self.min_nodes, self.max_nodes,
+                                             self.min_deg, self.max_deg)
                 graphs.append(g)
                 feats.append(feat)
-            for i in range(n_B):
+            for _ in range(n_B):
                 g, feat = self.gen_component(self.feature_type, self.B_params,
-                                        self.min_nodes, self.max_nodes,
-                                        self.min_deg, self.max_deg)
+                                             self.min_nodes, self.max_nodes,
+                                             self.min_deg, self.max_deg)
                 graphs.append(g)
                 feats.append(feat)
 
@@ -103,7 +100,7 @@ class Sync_pool_dataset():
             else:
                 composite_label = 1
             compo_g = self.connect_subgraphs(graphs)
-            compo_feats = np.concatenate(feats,axis=0)
+            compo_feats = np.concatenate(feats, axis=0)
             self.graphs.append(compo_g)
             self.features.append(compo_feats)
             self.labels.append(composite_label)
@@ -128,11 +125,11 @@ class Sync_pool_dataset():
         for (src, dst) in super_g.edges():
             a_src = random.randint((0 if src == 0 else
                                     accu_bg_node_list[src-1]),
-                                    accu_bg_node_list[src])
+                                   accu_bg_node_list[src])
             a_dst = random.randint((0 if dst == 0 else
                                     accu_bg_node_list[dst-1]),
-                                    accu_bg_node_list[dst])
-            g.add_edges([a_src],[a_dst])
+                                   accu_bg_node_list[dst])
+            g.add_edges([a_src], [a_dst])
             # add super edge type?
 
         g = self.to_networkx(g)
