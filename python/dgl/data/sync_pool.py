@@ -1,7 +1,9 @@
 import numpy as np
 import networkx as nx
 import random
+import torch
 import dgl
+from .tu import DiffpoolDataset
 
 class SyncPoolDataset():
     """A synthetic dataset for graph pooling.
@@ -41,8 +43,8 @@ class SyncPoolDataset():
     2) If backend = DGL: return DGL graph and DGL backend tensor.
     """
 
-    def __init__(self, num_graphs, gen_graph_type='default',
-                 num_sub_graphs=15,
+    def __init__(self, num_graphs, gen_graph_type='tu',
+                 num_sub_graphs=3,
                  feature_type='gaussian', data_split_ratio=[0.8, 0.1, 0.1]):
         super(SyncPoolDataset, self).__init__()
         self.num_graphs = num_graphs
@@ -59,9 +61,18 @@ class SyncPoolDataset():
         self.B_params = {'label':1, 'mean':np.random.uniform(0, 1),
                          'variance':np.random.uniform(0, 1),
                          'dim':32}
+        self.tu_name = 'ENZYMES'
+        self.d_k_a = {}
+        self.d_k_a['feature_mode'] = 'default'
+        self.d_k_a['assign_feat'] = 'id'
+        self.tu_dataset = DiffpoolDataset(self.tu_name, use_node_attr=True,
+                                          use_node_label=False, mode='train',
+                                          train_ratio=0.8, test_rato=0.1,
+                                          **self.d_k_a)
         self.graphs = []
         self.features = []
         self.labels = []
+        self.n2sub_labels = []
         self.gen_graphs()
 
         BACKEND = 'default'
@@ -70,7 +81,8 @@ class SyncPoolDataset():
         return len(self.graphs)
 
     def __getitem__(self, idx):
-        return self.graphs[idx], self.features[idx], self.labels[idx]
+        return self.graphs[idx], self.features[idx], self.labels[idx],\
+    self.n2sub_labels[idx]
 
     def _get_all(self):
         return self.graphs, self.features, self.labels
@@ -79,6 +91,7 @@ class SyncPoolDataset():
         for n in range(self.num_graphs):
             graphs = []
             feats = []
+            n2sub_labels = []
             split_ratio = np.random.uniform(0, 1)
             n_A = int(split_ratio * self.num_sub_graphs)
             n_B = self.num_sub_graphs - n_A
@@ -88,13 +101,30 @@ class SyncPoolDataset():
                                                  self.min_nodes, self.max_nodes,
                                                  self.min_deg, self.max_deg)
                 elif self.gen_graph_type == 'tu':
-                    g, feat, 
+                    g, feat = self.gen_component_from_dataset(self.tu_dataset,
+                                                              0)
+                    for (key, value) in g.ndata.items():
+                        g.ndata[key] = torch.Tensor(value)
+                    n2sub_labels = n2sub_labels + [0 for _ in
+                                                   range(g.number_of_nodes())]
+                    # here we assume TU returns DGLGraph
+                    # g = self.to_networkx(g).to_undirected()
+
                 graphs.append(g)
                 feats.append(feat)
             for _ in range(n_B):
-                g, feat = self.gen_component(self.feature_type, self.B_params,
-                                             self.min_nodes, self.max_nodes,
-                                             self.min_deg, self.max_deg)
+                if self.gen_graph_type == 'default':
+                    g, feat = self.gen_component(self.feature_type, self.B_params,
+                                                 self.min_nodes, self.max_nodes,
+                                                 self.min_deg, self.max_deg)
+                elif self.gen_graph_type == 'tu':
+                    g, feat = self.gen_component_from_dataset(self.tu_dataset,
+                                                              1)
+                    for (key, value) in g.ndata.items():
+                        g.ndata[key] = torch.Tensor(value)
+                    n2sub_labels = n2sub_labels + [1 for _ in
+                                                   range(g.number_of_nodes())]
+                    # g = self.to_networkx(g).to_undirected()
                 graphs.append(g)
                 feats.append(feat)
 
@@ -107,6 +137,7 @@ class SyncPoolDataset():
             self.graphs.append(compo_g)
             self.features.append(compo_feats)
             self.labels.append(composite_label)
+            self.n2sub_labels.append(n2sub_labels)
 
 
     def connect_subgraphs(self, graph_list):
@@ -115,10 +146,14 @@ class SyncPoolDataset():
         return : a randomly connected graph.
         '''
         # we assume num sub graph is 15
-        super_g = nx.erdos_renyi_graph(len(graph_list), 0.2, seed=123,
+        super_g = nx.erdos_renyi_graph(len(graph_list), 0.6, seed=123,
                                        directed=False)
+        while ( not nx.is_connected(super_g)):
+            super_g = nx.erdos_renyi_graph(len(graph_list), 0.6, seed=123,
+                                           directed=False)
         # first we cast the graph_list to a large graph using DGL API
-        graph_list = [self.from_networkx(g) for g in graph_list]
+        if self.gen_graph_type == 'default':
+            graph_list = [self.from_networkx(g) for g in graph_list]
         batch_graph = dgl.batch(graph_list)
         bg_node_list = batch_graph.batch_num_nodes
         g = self.de_batch(batch_graph)
@@ -128,10 +163,10 @@ class SyncPoolDataset():
         for (src, dst) in super_g.edges():
             a_src = random.randint((0 if src == 0 else
                                     accu_bg_node_list[src-1]),
-                                   accu_bg_node_list[src])
+                                   accu_bg_node_list[src]-1)
             a_dst = random.randint((0 if dst == 0 else
                                     accu_bg_node_list[dst-1]),
-                                   accu_bg_node_list[dst])
+                                   accu_bg_node_list[dst]-1)
             g.add_edges([a_src], [a_dst])
             # add super edge type?
 
@@ -157,6 +192,14 @@ class SyncPoolDataset():
         # dg.ndata['feat'] = g.ndata['feat']
 
         return dg
+
+    def gen_component_from_dataset(self, dataset, label=0):
+        # dataset statistics inquiry
+        # assert required label class is actually there
+        g, feat = dataset.sample(label)
+
+        return g, feat
+
 
 
 

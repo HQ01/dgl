@@ -6,6 +6,7 @@ import networkx as nx
 import dgl
 from .utils import download, extract_archive, get_download_dir
 
+
 class TUDataset(object):
     '''
     TU dataset
@@ -246,3 +247,33 @@ class DiffpoolDataset(TUDataset):
         return self.graph_lists[0].ndata['feat'].shape[1],\
                 self.graph_lists[0].ndata['a_feat'].shape[1],\
                 self.num_labels, self.max_num_node
+    def sample(self, target_label):
+        '''
+        yield one graph instance of particular label
+        '''
+        # sample is only expcted to work in train mode
+        sample_label = -1
+        if self.mode == 'train':
+            sample_range = len(self.train_labels)
+            sample_graphs = self.train_graphs
+            sample_labels = self.train_labels
+        elif self.mode == 'val':
+            sample_range = len(self.val_labels)
+            sample_graphs = self.val_graphs
+            sample_labels = self.val_labels
+        elif self.mode == 'test':
+            sample_range = len(self.test_labels)
+            sample_graphs = self.test_graphs
+            sample_labels = self.test_labels
+        else:
+            print('warning -- sampling dataset without train/val/test split')
+            raise NotImplementedError
+
+        while sample_label != target_label:
+            # randint sample from closed interval
+            choice = random.randint(0, sample_range-1)
+            sample_label = sample_labels[choice]
+        sample_graph = sample_graphs[choice]
+        # assume only one node feature called 'feat'
+        return sample_graph, sample_graph.ndata['feat']
+
