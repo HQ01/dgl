@@ -24,15 +24,9 @@ class SyncPoolDataset():
     num_sub_graphs: int
         Number of subgraphs in each component. For now we assume it's a fixed
         number, but it could change.
-    split_ratio: float
-        Split ratio between class A and class B.
     feature_type: string
         feature type of each sub graph. Could be gaussian with different mean
         and variance, tuned by subgraph type.
-    graph_label: int
-        the composite graph label
-    data_split_ratio: list
-        list of dataset split ratio that sums to 1.
     mode: string
         decide what to return
 
@@ -45,7 +39,7 @@ class SyncPoolDataset():
 
     def __init__(self, num_graphs, gen_graph_type='tu',
                  num_sub_graphs=3,
-                 feature_type='gaussian', data_split_ratio=[0.8, 0.1, 0.1]):
+                 feature_type='gaussian', mode='train'):
         super(SyncPoolDataset, self).__init__()
         self.num_graphs = num_graphs
         self.gen_graph_type = gen_graph_type
@@ -66,7 +60,7 @@ class SyncPoolDataset():
         self.d_k_a['feature_mode'] = 'default'
         self.d_k_a['assign_feat'] = 'id'
         self.tu_dataset = DiffpoolDataset(self.tu_name, use_node_attr=True,
-                                          use_node_label=False, mode='train',
+                                          use_node_label=False, mode=mode,
                                           train_ratio=0.8, test_rato=0.1,
                                           **self.d_k_a)
         self.graphs = []
