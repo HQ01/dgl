@@ -24,7 +24,7 @@ parser.add_option("-v", "--vocab", dest="vocab", default='vocab', help='Vocab fi
 parser.add_option("-s", "--save_dir", dest="save_path")
 parser.add_option("-m", "--model", dest="model_path", default=None)
 parser.add_option("-b", "--batch", dest="batch_size", default=40)
-parser.add_option("-w", "--hidden", dest="hidden_size", default=200)
+parser.add_option("-w", "--hidden", dest="hidden_size", default=450)
 parser.add_option("-l", "--latent", dest="latent_size", default=56)
 parser.add_option("-d", "--depth", dest="depth", default=3)
 parser.add_option("-z", "--beta", dest="beta", default=0.005)
@@ -60,7 +60,7 @@ optimizer = optim.Adam(model.parameters(), lr=lr)
 scheduler = lr_scheduler.ExponentialLR(optimizer, 0.9)
 scheduler.step()
 
-MAX_EPOCH = 7
+MAX_EPOCH = 50
 PRINT_ITER = 20
 
 def train():
