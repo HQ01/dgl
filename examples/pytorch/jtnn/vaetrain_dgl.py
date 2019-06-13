@@ -27,8 +27,8 @@ parser.add_option("-b", "--batch", dest="batch_size", default=40)
 parser.add_option("-w", "--hidden", dest="hidden_size", default=200)
 parser.add_option("-l", "--latent", dest="latent_size", default=56)
 parser.add_option("-d", "--depth", dest="depth", default=3)
-parser.add_option("-z", "--beta", dest="beta", default=1.0)
-parser.add_option("-q", "--lr", dest="lr", default=1e-3)
+parser.add_option("-z", "--beta", dest="beta", default=0.005)
+parser.add_option("-q", "--lr", dest="lr", default=0.0007)
 parser.add_option("-T", "--test", dest="test", action="store_true")
 opts,args = parser.parse_args()
 
@@ -60,7 +60,7 @@ optimizer = optim.Adam(model.parameters(), lr=lr)
 scheduler = lr_scheduler.ExponentialLR(optimizer, 0.9)
 scheduler.step()
 
-MAX_EPOCH = 100
+MAX_EPOCH = 7
 PRINT_ITER = 20
 
 def train():
